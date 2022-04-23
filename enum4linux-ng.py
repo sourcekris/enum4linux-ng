@@ -1100,7 +1100,12 @@ class EnumLsaqueryDomainInfo():
         command. This command will do an LSA_QueryInfoPolicy request to get the domain name and the domain service identifier
         (SID).
         '''
-        command = ['rpcclient', '-W', self.target.workgroup, '-U', f'{self.creds.user}%{self.creds.pw}', self.target.host, '-c', 'lsaquery']
+        pw = self.creds.pw
+        hashflag = ''
+        if self.creds.nthash:
+            pw = self.creds.nthash
+            hashflag = "--pw-nt-hash"
+        command = ['rpcclient', '-W', self.target.workgroup, '-U', f'{self.creds.user}%{pw}', hashflag, self.target.host, '-c', 'lsaquery']
         result = run(command, "Attempting to get domain SID", self.target.samba_config, timeout=self.target.timeout)
 
         if not result.retval:
@@ -1209,8 +1214,12 @@ class EnumOsInfo():
         NetSrvGetInfo() on the target. This will return OS information (OS version, platform id,
         server type).
         '''
-
-        command = ["rpcclient", "-W", self.target.workgroup, '-U', f'{self.creds.user}%{self.creds.pw}', '-c', 'srvinfo', self.target.host]
+        pw = self.creds.pw
+        hashflag = ''
+        if self.creds.nthash:
+            pw = self.creds.nthash
+            hashflag = "--pw-nt-hash"
+        command = ["rpcclient", "-W", self.target.workgroup, '-U', f'{self.creds.user}%{pw}', hashflag, '-c', 'srvinfo', self.target.host]
         result = run(command, "Attempting to get OS info with command", self.target.samba_config, timeout=self.target.timeout)
 
         if not result.retval:
@@ -1447,7 +1456,12 @@ class EnumUsersRpc():
         This request will return users with their corresponding Relative ID (RID) as well as multiple account information like a
         description of the account.
         '''
-        command = ['rpcclient', '-W', self.target.workgroup, '-U', f'{self.creds.user}%{self.creds.pw}', '-c', 'querydispinfo', self.target.host]
+        pw = self.creds.pw
+        hashflag = ''
+        if self.creds.nthash:
+            pw = self.creds.nthash
+            hashflag = "--pw-nt-hash"
+        command = ['rpcclient', '-W', self.target.workgroup, '-U', f'{self.creds.user}%{pw}', hashflag, '-c', 'querydispinfo', self.target.host]
         result = run(command, "Attempting to get userlist", self.target.samba_config, timeout=self.target.timeout)
 
         if not result.retval:
@@ -1462,7 +1476,12 @@ class EnumUsersRpc():
         the registry key HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Control\\Lsa\\RestrictAnonymous = 0. If this is set to
         1 enumeration is no longer possible.
         '''
-        command = ["rpcclient", "-W", self.target.workgroup, "-U", f"{self.creds.user}%{self.creds.pw}", "-c", "enumdomusers", self.target.host]
+        pw = self.creds.pw
+        hashflag = ''
+        if self.creds.nthash:
+            pw = self.creds.nthash
+            hashflag = "--pw-nt-hash"
+        command = ["rpcclient", "-W", self.target.workgroup, "-U", f"{self.creds.user}%{pw}", hashflag,  "-c", "enumdomusers", self.target.host]
         result = run(command, "Attempting to get userlist", self.target.samba_config, timeout=self.target.timeout)
 
         if not result.retval:
@@ -1527,8 +1546,13 @@ class EnumUsersRpc():
         if not valid_rid(rid):
             return Result(None, f"Invalid rid passed: {rid}")
 
+        pw = self.creds.pw
+        hashflag = ''
+        if self.creds.nthash:
+            pw = self.creds.nthash
+            hashflag = "--pw-nt-hash"
         details = OrderedDict()
-        command = ["rpcclient", "-W", self.target.workgroup, "-U", f"{self.creds.user}%{self.creds.pw}", "-c", f"queryuser {rid}", self.target.host]
+        command = ["rpcclient", "-W", self.target.workgroup, "-U", f"{self.creds.user}%{pw}", hashflag,  "-c", f"queryuser {rid}", self.target.host]
         result = run(command, "Attempting to get detailed user info", self.target.samba_config, timeout=self.target.timeout)
 
         if not result.retval:
@@ -1679,7 +1703,12 @@ class EnumGroupsRpc():
         if grouptype not in ["builtin", "domain", "local"]:
             return Result(None, f"Unsupported grouptype, supported types are: { ','.join(grouptype_dict.keys()) }")
 
-        command = ["rpcclient", "-W", self.target.workgroup, "-U", f"{self.creds.user}%{self.creds.pw}", "-c", f"{grouptype_dict[grouptype]}", self.target.host]
+        pw = self.creds.pw
+        hashflag = ''
+        if self.creds.nthash:
+            pw = self.creds.nthash
+            hashflag = "--pw-nt-hash"
+        command = ["rpcclient", "-W", self.target.workgroup, "-U", f"{self.creds.user}%{pw}", hashflag, "-c", f"{grouptype_dict[grouptype]}", self.target.host]
         result = run(command, f"Attempting to get {grouptype} groups", self.target.samba_config, timeout=self.target.timeout)
 
         if not result.retval:
@@ -1716,8 +1745,14 @@ class EnumGroupsRpc():
         if not valid_rid(rid):
             return Result(None, f"Invalid rid passed: {rid}")
 
+        pw = self.creds.pw
+        hashflag = ''
+        if self.creds.nthash:
+            pw = self.creds.nthash
+            hashflag = "--pw-nt-hash"
+
         details = OrderedDict()
-        command = ["rpcclient", "-W", self.target.workgroup, "-U", f'{self.creds.user}%{self.creds.pw}', "-c", f"querygroup {rid}", self.target.host]
+        command = ["rpcclient", "-W", self.target.workgroup, "-U", f'{self.creds.user}%{pw}', hashflag, "-c", f"querygroup {rid}", self.target.host]
         result = run(command, "Attempting to get detailed group info", self.target.samba_config, timeout=self.target.timeout)
 
         if not result.retval:
@@ -1862,9 +1897,14 @@ class RidCycling():
         sids = []
         sid_patterns_list = [r"(S-1-5-21-[\d-]+)-\d+", r"(S-1-5-[\d-]+)-\d+", r"(S-1-22-[\d-]+)-\d+"]
 
+        pw = self.creds.pw
+        hashflag = ''
+        if self.creds.nthash:
+            pw = self.creds.nthash
+            hashflag = "--pw-nt-hash"
         # Try to get a valid SID from well-known user names
         for known_username in users.split(','):
-            command = ["rpcclient", "-W", self.target.workgroup, "-U", f"{self.creds.user}%{self.creds.pw}", "-c", f"lookupnames {known_username}", self.target.host]
+            command = ["rpcclient", "-W", self.target.workgroup, "-U", f"{self.creds.user}%{pw}", hashflag, "-c", f"lookupnames {known_username}", self.target.host]
             result = run(command, f"Attempting to get SID for user {known_username}", self.target.samba_config, error_filter=False, timeout=self.target.timeout)
             sid_string = result.retmsg
 
@@ -1881,7 +1921,12 @@ class RidCycling():
 
         #FIXME: Use nt_status_error_filter - then remove the error_filter=False part above
         # Try to get SID list via lsaenumsid
-        command = ["rpcclient", "-W", self.target.workgroup, "-U", f"{self.creds.user}%{self.creds.pw}", "-c", "lsaenumsid", self.target.host]
+        pw = self.creds.pw
+        hashflag = ''
+        if self.creds.nthash:
+            pw = self.creds.nthash
+            hashflag = "--pw-nt-hash"
+        command = ["rpcclient", "-W", self.target.workgroup, "-U", f"{self.creds.user}%{pw}", hashflag, "-c", "lsaenumsid", self.target.host]
         result = run(command, "Attempting to get SIDs via 'lsaenumsid'", self.target.samba_config, error_filter=False, timeout=self.target.timeout)
 
         if "NT_STATUS_ACCESS_DENIED" not in result.retmsg:
@@ -1899,12 +1944,17 @@ class RidCycling():
         '''
         Takes a SID as first parameter well as list of RID ranges (as tuples) as second parameter and does RID cycling.
         '''
+        pw = self.creds.pw
+        hashflag = ''
+        if self.creds.nthash:
+            pw = self.creds.nthash
+            hashflag = "--pw-nt-hash"
         for rid_range in rid_ranges:
             (start_rid, end_rid) = rid_range
 
             #FIXME: Use nt_status_error_filter - then remove the error_filter=False part above
             for rid in range(start_rid, end_rid+1):
-                command = ["rpcclient", "-W", self.target.workgroup, "-U", f"{self.creds.user}%{self.creds.pw}", self.target.host, "-c", f"lookupsids {sid}-{rid}"]
+                command = ["rpcclient", "-W", self.target.workgroup, "-U", f"{self.creds.user}%{pw}", hashflag, self.target.host, "-c", f"lookupsids {sid}-{rid}"]
                 result = run(command, "RID Cycling", self.target.samba_config, error_filter=False, timeout=self.target.timeout)
 
                 # Example: S-1-5-80-3139157870-2983391045-3678747466-658725712-1004 *unknown*\*unknown* (8)
@@ -2326,7 +2376,12 @@ class EnumPrinters():
         '''
         Tries to enum printer via rpcclient's enumprinters.
         '''
-        command = ["rpcclient", "-W", self.target.workgroup, "-U", f"{self.creds.user}%{self.creds.pw}", "-c", "enumprinters", self.target.host]
+        pw = self.creds.pw
+        hashflag = ''
+        if self.creds.nthash:
+            pw = self.creds.nthash
+            hashflag = "--pw-nt-hash"
+        command = ["rpcclient", "-W", self.target.workgroup, "-U", f"{self.creds.user}%{pw}", hashflag, "-c", "enumprinters", self.target.host]
         result = run(command, "Attempting to get printer info", self.target.samba_config, timeout=self.target.timeout)
         printers = {}
 
@@ -2914,7 +2969,7 @@ def check_arguments():
     parser.add_argument("-w", dest="workgroup", default='', type=str, help="Specify workgroup/domain manually (usually found automatically)")
     parser.add_argument("-u", dest="user", default='', type=str, help="Specify username to use (default \"\")")
     parser.add_argument("-p", dest="pw", default='', type=str, help="Specify password to use (default \"\")")
-    parser.add_argument("-n", dest="nthash", default='', type=str, help="Specify NTLM hash to use with smbclient (default \"\")")
+    parser.add_argument("-n", dest="nthash", default='', type=str, help="Specify NTLM hash to use with smbclient, rpcclient (default \"\")")
     parser.add_argument("-d", action="store_true", help="Get detailed information for users and groups, applies to -U, -G and -R")
     parser.add_argument("-k", dest="users", default=KNOWN_USERNAMES, type=str, help=f'User(s) that exists on remote system (default: {KNOWN_USERNAMES}).\nUsed to get sid with "lookupsid known_username"')
     parser.add_argument("-r", dest="ranges", default=RID_RANGES, type=str, help=f"RID ranges to enumerate (default: {RID_RANGES})")
