@@ -403,12 +403,8 @@ class Credentials:
             print_info("Provided password matches the format of an NTLM hash, using Pass the hash for smbclient.")
             self.nthash = match.group(1)
 
-        self.pw_is_hash = False
-        if nthash:
-            self.pw_is_hash = True
-
     def as_dict(self):
-        return {'credentials':OrderedDict({'user':self.user, 'password':self.pw, 'random_user':self.random_user, 'nthash':self.nthash, 'pw_is_hash':self.pw_is_hash})}
+        return {'credentials':OrderedDict({'user':self.user, 'password':self.pw, 'random_user':self.random_user, 'nthash':self.nthash})}
 
 class SambaConfig:
     '''
