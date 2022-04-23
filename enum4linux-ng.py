@@ -390,14 +390,25 @@ class Credentials:
     '''
     Stores usernames and password.
     '''
-    def __init__(self, user, pw):
+    def __init__(self, user, pw, nthash=None):
         # Create an alternative user with pseudo-random username
         self.random_user = ''.join(random.choice("abcdefghijklmnopqrstuvwxyz") for i in range(8))
         self.user = user
         self.pw = pw
+        self.nthash = nthash
+
+        # Autodetect when the password might be an NTLM.
+        match = re.search(r"(^[0-9a-fA-F]{32}$)", pw)
+        if match and not nthash:
+            print_info("Provided password matches the format of an NTLM hash, using Pass the hash for smbclient.")
+            self.nthash = match.group(1)
+
+        self.pw_is_hash = False
+        if nthash:
+            self.pw_is_hash = True
 
     def as_dict(self):
-        return {'credentials':OrderedDict({'user':self.user, 'password':self.pw, 'random_user':self.random_user})}
+        return {'credentials':OrderedDict({'user':self.user, 'password':self.pw, 'random_user':self.random_user, 'nthash':self.nthash, 'pw_is_hash':self.pw_is_hash})}
 
 class SambaConfig:
     '''
@@ -833,6 +844,7 @@ class EnumSessions():
         'case_senstive'. We search for this command as an indicator that the IPC session was setup correctly.
         '''
 
+        hashflag = ''
         if random_user_session:
             user = creds.random_user
             pw = ''
@@ -841,12 +853,17 @@ class EnumSessions():
             user = ''
             pw = ''
             session_type = "null"
+        elif creds.nthash and creds.user:
+            user = creds.user
+            pw = creds.nthash
+            session_type = "user"
+            hashflag = "--pw-nt-hash"
         else:
             user = creds.user
             pw = creds.pw
             session_type = "user"
 
-        command = ['smbclient', '-t', f"{self.target.timeout}", '-W', self.target.workgroup, f'//{self.target.host}/ipc$', '-U', f'{user}%{pw}', '-c', 'help']
+        command = ['smbclient', '-t', f"{self.target.timeout}", '-W', self.target.workgroup, f'//{self.target.host}/ipc$', '-U', f'{user}%{pw}', '-c', 'help', hashflag]
         result = run(command, "Attempting to make session", self.target.samba_config)
 
         if not result.retval:
@@ -1963,7 +1980,13 @@ class EnumShares():
         smbclient will open a connection to the Server Service Remote Protocol named pipe (srvsvc). Once connected
         it calls the NetShareEnumAll() to get a list of shares.
         '''
-        command = ["smbclient", "-t", f"{self.target.timeout}", "-W", self.target.workgroup, "-U", f"{self.creds.user}%{self.creds.pw}", "-L", f"//{self.target.host}", "-g"]
+        pw = self.creds.pw
+        hashflag = ''
+        if self.creds.nthash:
+            pw = self.creds.nthash
+            hashflag = "--pw-nt-hash"
+
+        command = ["smbclient", "-t", f"{self.target.timeout}", "-W", self.target.workgroup, "-U", f"{self.creds.user}%{pw}", "-L", f"//{self.target.host}", "-g", hashflag]
         result = run(command, "Attempting to get share list using authentication", self.target.samba_config)
 
         if not result.retval:
@@ -1995,7 +2018,13 @@ class EnumShares():
         In order to enumerate access permissions, smbclient is used with the "dir" command.
         In the background this will send an SMB I/O Control (IOCTL) request in order to list the contents of the share.
         '''
-        command = ["smbclient", "-t", f"{self.target.timeout}", "-W", self.target.workgroup, "-U", f"{self.creds.user}%{self.creds.pw}", f"//{self.target.host}/{share}", "-c", "dir"]
+        pw = self.creds.pw
+        hashflag = ''
+        if self.creds.nthash:
+            pw = self.creds.nthash
+            hashflag = "--pw-nt-hash"
+
+        command = ["smbclient", "-t", f"{self.target.timeout}", "-W", self.target.workgroup, "-U", f"{self.creds.user}%{pw}", f"//{self.target.host}/{share}", "-c", "dir", hashflag]
         result = run(command, f"Attempting to map share //{self.target.host}/{share}", self.target.samba_config, error_filter=False)
 
         if "NT_STATUS_BAD_NETWORK_NAME" in result.retmsg:
@@ -2394,7 +2423,7 @@ class Enumerator():
 
         # Init target and creds
         try:
-            self.creds = Credentials(args.user, args.pw)
+            self.creds = Credentials(args.user, args.pw, nthash=args.nthash)
             self.target = Target(args.host, args.workgroup, timeout=args.timeout)
         except:
             raise RuntimeError(f"Target {args.host} is not a valid IP or could not be resolved")
@@ -2889,6 +2918,7 @@ def check_arguments():
     parser.add_argument("-w", dest="workgroup", default='', type=str, help="Specify workgroup/domain manually (usually found automatically)")
     parser.add_argument("-u", dest="user", default='', type=str, help="Specify username to use (default \"\")")
     parser.add_argument("-p", dest="pw", default='', type=str, help="Specify password to use (default \"\")")
+    parser.add_argument("-n", dest="nthash", default='', type=str, help="Specify NTLM hash to use with smbclient (default \"\")")
     parser.add_argument("-d", action="store_true", help="Get detailed information for users and groups, applies to -U, -G and -R")
     parser.add_argument("-k", dest="users", default=KNOWN_USERNAMES, type=str, help=f'User(s) that exists on remote system (default: {KNOWN_USERNAMES}).\nUsed to get sid with "lookupsid known_username"')
     parser.add_argument("-r", dest="ranges", default=RID_RANGES, type=str, help=f"RID ranges to enumerate (default: {RID_RANGES})")
@@ -2920,6 +2950,10 @@ def check_arguments():
     # Only global variable which meant to be modified
     global_verbose = args.verbose
 
+    # Only 1 of pw or nthash should be provided.
+    if args.pw and args.nthash:
+        raise RuntimeError("Both password and NTLM hash provided, choose just one.")
+    
     # Check Workgroup
     if args.workgroup:
         if not valid_workgroup(args.workgroup):
