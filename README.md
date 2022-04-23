@@ -102,6 +102,7 @@ optional arguments:
   -w WORKGROUP       Specify workgroup/domain manually (usually found automatically)
   -u USER            Specify username to use (default "")
   -p PW              Specify password to use (default "")
+  -n NTHASH          Specify NTLM hash to use with smbclient (default "")
   -d                 Get detailed information for users and groups, applies to -U, -G and -R
   -k USERS           User(s) that exists on remote system (default: administrator,guest,krbtgt,domain admins,root,bin,none). Used to get sid with "lookupsid known_username"
   -r RANGES          RID ranges to enumerate (default: 500-550,1000-1050)
